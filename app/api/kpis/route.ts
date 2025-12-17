@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate KPIs
     const kpis = calculateKPIs(interactions, leads, dateRange)
+    console.log('Calculated KPIs:', kpis, { requestId, businessId, dateRange })
 
     const response = NextResponse.json({
       success: true,
