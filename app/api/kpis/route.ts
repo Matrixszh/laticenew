@@ -32,18 +32,16 @@ export async function GET(request: NextRequest) {
           }
         : undefined
 
-    // Fetch interactions and leads
+    // Fetch interactions and leads (temporarily without filters for debugging)
     const [interactionsData, leadsData] = await Promise.all([
       airtableBase('Interactions')
         .select({
-          maxRecords: 10000, // Increased for date filtering
-          filterByFormula: `FIND("${businessId}", ARRAYJOIN({Business}))`,
+          maxRecords: 10000,
         })
         .all(),
       airtableBase('Leads')
         .select({
           maxRecords: 10000,
-          filterByFormula: `FIND("${businessId}", ARRAYJOIN({Business}))`,
         })
         .all(),
     ])
