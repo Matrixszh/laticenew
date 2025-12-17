@@ -50,8 +50,8 @@ async function main() {
       'Vapi Number': '+10000000000',
       Active: true,
       'Handover Enabled': false,
-    })
-    business = created as any
+    }) as any
+    business = created
     console.log(`- Created business: ${created.id}`)
   } else {
     console.log(`- Using existing business: ${business.id}`)
