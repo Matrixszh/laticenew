@@ -1,0 +1,52 @@
+{
+  "name": "lattice-ai-platform",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "prebuild": "rm -rf .next",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "airtable:drift": "tsx scripts/airtable-drift-report.ts",
+    "airtable:setup-schema": "tsx scripts/setup-airtable-schema.ts",
+    "airtable:seed": "tsx scripts/seed-airtable.ts"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^5.0.0",
+    "airtable": "^0.12.2",
+    "date-fns": "^3.6.0",
+    "next": "14.2.35",
+    "rate-limiter-flexible": "^5.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^16.0.0",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.17",
+    "dotenv": "^16.3.1",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.35",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "path-scurry": "^2.0.1",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.5.3"
+  }
+}
