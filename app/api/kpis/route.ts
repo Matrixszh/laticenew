@@ -51,6 +51,14 @@ export async function GET(request: NextRequest) {
     console.log('Fetched interactions:', interactionsData.length, { requestId, businessId })
     console.log('Fetched leads:', leadsData.length, { requestId, businessId })
 
+    // Log first few records for debugging
+    if ((interactionsData as any[]).length > 0) {
+      console.log('First interaction:', JSON.stringify((interactionsData as any[])[0], null, 2))
+    }
+    if ((leadsData as any[]).length > 0) {
+      console.log('First lead:', JSON.stringify((leadsData as any[])[0], null, 2))
+    }
+
     const interactions = (interactionsData as any[]).map((r: any) => ({
       fields: r.fields,
       // Use Start UTC for when the interaction occurred, fall back to createdTime
@@ -66,6 +74,8 @@ export async function GET(request: NextRequest) {
     // Calculate KPIs
     const kpis = calculateKPIs(interactions, leads, dateRange)
     console.log('Calculated KPIs:', kpis, { requestId, businessId, dateRange })
+    console.log('Interactions with Status/Type:', interactions.map(i => ({ Type: i.fields.Type, Direction: i.fields.Direction, createdTime: i.createdTime })))
+    console.log('Leads with Status:', leads.map(l => ({ Status: l.fields.Status, createdTime: l.createdTime })))
 
     const response = NextResponse.json({
       success: true,
