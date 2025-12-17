@@ -50,12 +50,12 @@ export async function GET(request: NextRequest) {
 
     const interactions = (interactionsData as any[]).map((r: any) => ({
       fields: r.fields,
-      createdTime: r.fields.Created || r.createdTime,
+      createdTime: r.fields.Created ? String(r.fields.Created) : r.createdTime,
     }))
 
     const leads = (leadsData as any[]).map((r: any) => ({
       fields: r.fields,
-      createdTime: r.fields.Created || r.createdTime,
+      createdTime: r.fields.Created ? String(r.fields.Created) : r.createdTime,
     }))
 
     // Calculate KPIs
