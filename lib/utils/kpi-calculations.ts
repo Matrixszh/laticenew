@@ -35,14 +35,14 @@ export function calculateKPIs(
     end.setHours(23, 59, 59, 999)
 
     filteredInteractions = interactions.filter((interaction) => {
-      const created = interaction.createdTime
-        ? new Date(interaction.createdTime)
-        : new Date()
+      if (!interaction.createdTime) return false
+      const created = new Date(interaction.createdTime)
       return created >= start && created <= end
     })
 
     filteredLeads = leads.filter((lead) => {
-      const created = lead.createdTime ? new Date(lead.createdTime) : new Date()
+      if (!lead.createdTime) return false
+      const created = new Date(lead.createdTime)
       return created >= start && created <= end
     })
   }
