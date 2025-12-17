@@ -21,12 +21,17 @@ export async function GET() {
   const airtableReady = isAirtableReady()
   const setupReady = isSetupReady()
 
-  // Check schema if Airtable is configured
+  // Check schema if Airtable is configured with a timeout
   let schemaOk = false
   let schemaErrors: string[] = []
   if (airtableReady) {
     try {
-      const schemaResult = await verifySchema()
+      // Add a 5 second timeout to schema verification
+      const schemaPromise = verifySchema()
+      const timeoutPromise = new Promise<{ valid: false; errors: string[] }>((resolve) =>
+        setTimeout(() => resolve({ valid: false, errors: ['Schema verification timeout'] }), 5000)
+      )
+      const schemaResult = await Promise.race([schemaPromise, timeoutPromise])
       schemaOk = schemaResult.valid
       schemaErrors = schemaResult.errors.slice(0, 10) // Limit to top 10 errors
     } catch (error) {
@@ -49,7 +54,6 @@ export async function GET() {
     missingAirtable: airtableReady ? [] : getMissingAirtableVars(),
     timestamp: new Date().toISOString(),
   })
-  
+
   return applySecurityHeaders(response)
 }
-

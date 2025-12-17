@@ -90,16 +90,21 @@ export async function verifySchema(): Promise<SchemaVerificationResult> {
       return { valid: false, mismatches, errors }
     }
 
-    // Fetch actual schema from Airtable
+    // Fetch actual schema from Airtable with timeout
     const baseId = process.env.AIRTABLE_BASE_ID!
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 4000) // 4 second timeout
+
     const response = await fetch(
       `https://api.airtable.com/v0/meta/bases/${baseId}/tables`,
       {
         headers: {
           Authorization: `Bearer ${process.env.AIRTABLE_TOKEN}`,
         },
+        signal: controller.signal,
       }
     )
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
