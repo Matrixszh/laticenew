@@ -48,6 +48,9 @@ export async function GET(request: NextRequest) {
         .all(),
     ])
 
+    console.log('Fetched interactions:', interactionsData.length, { requestId, businessId })
+    console.log('Fetched leads:', leadsData.length, { requestId, businessId })
+
     const interactions = (interactionsData as any[]).map((r: any) => ({
       fields: r.fields,
       createdTime: r.fields.Created ? String(r.fields.Created) : r.createdTime,
