@@ -35,15 +35,29 @@ export function calculateKPIs(
     end.setHours(23, 59, 59, 999)
 
     filteredInteractions = interactions.filter((interaction) => {
-      const created = interaction.createdTime
-        ? new Date(interaction.createdTime)
-        : new Date()
-      return created >= start && created <= end
+      // If no timestamp, include it (assume old data)
+      if (!interaction.createdTime) return true
+      try {
+        const created = new Date(interaction.createdTime)
+        // Check if date is valid
+        if (isNaN(created.getTime())) return true
+        return created >= start && created <= end
+      } catch {
+        return true
+      }
     })
 
     filteredLeads = leads.filter((lead) => {
-      const created = lead.createdTime ? new Date(lead.createdTime) : new Date()
-      return created >= start && created <= end
+      // If no timestamp, include it (assume old data)
+      if (!lead.createdTime) return true
+      try {
+        const created = new Date(lead.createdTime)
+        // Check if date is valid
+        if (isNaN(created.getTime())) return true
+        return created >= start && created <= end
+      } catch {
+        return true
+      }
     })
   }
 
