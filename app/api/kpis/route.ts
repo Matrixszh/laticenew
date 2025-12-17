@@ -53,12 +53,14 @@ export async function GET(request: NextRequest) {
 
     const interactions = (interactionsData as any[]).map((r: any) => ({
       fields: r.fields,
-      createdTime: r.fields.Created ? String(r.fields.Created) : r.createdTime,
+      // Use Start UTC for when the interaction occurred, fall back to createdTime
+      createdTime: r.fields['Start UTC'] ? String(r.fields['Start UTC']) : r.createdTime,
     }))
 
     const leads = (leadsData as any[]).map((r: any) => ({
       fields: r.fields,
-      createdTime: r.fields.Created ? String(r.fields.Created) : r.createdTime,
+      // Use createdTime for when the lead was created
+      createdTime: r.createdTime,
     }))
 
     // Calculate KPIs
