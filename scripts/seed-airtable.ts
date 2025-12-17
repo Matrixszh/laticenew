@@ -71,7 +71,7 @@ async function main() {
       Email: userEmail,
       Role: 'Admin',
       Business: [businessId],
-    } as any)
+    } as any) as any
     console.log(`- Created user: ${created.id} (${userEmail})`)
   } else {
     // Ensure it is linked to the demo business
@@ -264,5 +264,3 @@ main().catch((err) => {
   console.error(err instanceof Error ? err.message : String(err))
   process.exit(1)
 })
-
-
