@@ -30,17 +30,35 @@ export async function requireBusinessContext(): Promise<{
   userEmail: string
 }> {
   const userEmail = await getClerkUserEmail()
+  
+  console.log('=== Business Context Debug ===')
+  console.log('User email from Clerk:', userEmail)
 
   try {
+    const filterFormula = `{Email} = "${userEmail.replace(/"/g, '\\"')}"`
+    console.log('Filter formula:', filterFormula)
+    
     const users = await airtableBase('Users')
       .select({
-        filterByFormula: `{Email} = "${userEmail.replace(/"/g, '\\"')}"`,
+        filterByFormula: filterFormula,
         maxRecords: 1,
       })
       .firstPage()
 
+    console.log('Users found:', users.length)
+    
+    if (users.length > 0) {
+      console.log('User record:', {
+        id: users[0].id,
+        fields: users[0].fields
+      })
+    }
+
     if (!users || users.length === 0) {
-      throw new TenantError(403, { error: 'User not linked to a business' })
+      console.log('❌ No user found with email:', userEmail)
+      throw new TenantError(403, { 
+        error: `User with email ${userEmail} not found in Users table. Please add yourself to the Users table and link to a Business.`
+      })
     }
 
     const record = users[0]
@@ -49,11 +67,19 @@ export async function requireBusinessContext(): Promise<{
       : undefined
     const role = (record.fields.Role as string) || 'Staff'
 
+    console.log('Business ID:', businessId)
+    console.log('User role:', role)
+
     if (!businessId) {
-      throw new TenantError(403, { error: 'User not linked to a business' })
+      console.log('❌ User found but not linked to business')
+      throw new TenantError(403, { 
+        error: 'User not linked to a business. Please link your user record to a Business in Airtable.'
+      })
     }
 
+    console.log('✅ Business context resolved:', { businessId, role, userEmail })
     return { businessId, role, userEmail }
+    
   } catch (error: any) {
     if (error instanceof TenantError) {
       throw error
@@ -87,5 +113,8 @@ export function handleTenantError(error: any, requestId?: string) {
       { status: error.status || 403 }
     )
   }
-  return NextResponse.json({ success: false, error: 'Internal server error', requestId }, { status: 500 })
+  return NextResponse.json(
+    { success: false, error: 'Internal server error', requestId }, 
+    { status: 500 }
+  )
 }

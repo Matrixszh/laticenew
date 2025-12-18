@@ -15,62 +15,71 @@ export async function GET() {
   try {
     requireAirtableReady()
     const { businessId } = await requireBusinessContext()
+
     console.log('Fetching leads', { requestId, businessId })
 
-    // Some Airtable bases may not have a `Created` field (schema drift / partial setup).
-    // Prefer sorting by `Created` when available, but fall back to unsorted query if Airtable rejects it.
-    const leadsQuery = () =>
-      airtableBase('Leads')
-        .select({
-          maxRecords: 100,
-          sort: [{ field: 'Created', direction: 'desc' }],
-          filterByFormula: `FIND("${businessId}", ARRAYJOIN({Business}))`,
-        })
-        .all()
+    // Fetch ALL leads (no filter in Airtable query)
+    const allRecords = await airtableBase('Leads')
+      .select({
+        maxRecords: 100,
+        sort: [{ field: 'Name', direction: 'asc' }],
+      })
+      .all()
 
-    const records = await leadsQuery().catch((err: any) => {
-      const message = err?.message || ''
-      if (
-        err?.statusCode === 422 &&
-        (message.includes('Unknown field name: "Created"') || message.includes("Unknown field name: 'Created'"))
-      ) {
-        return airtableBase('Leads')
-          .select({
-            maxRecords: 100,
-            filterByFormula: `FIND("${businessId}", ARRAYJOIN({Business}))`,
-          })
-          .all()
+    console.log('Total leads fetched (unfiltered):', allRecords.length)
+
+    // Filter in JavaScript - this works reliably with linked records
+    const records = allRecords.filter((r: any) => {
+      const leadBusinessIds = r.fields.Business as string[] | undefined
+      const isMatch = leadBusinessIds?.includes(businessId)
+      if (allRecords.length <= 5) { // Only log details if small dataset
+        console.log('Lead:', r.fields.Name, 'Business:', leadBusinessIds, 'Match:', isMatch)
       }
-      throw err
+      return isMatch
     })
+
+    console.log('Total leads after filtering by business:', records.length)
+
+    if (records.length === 0) {
+      console.log('⚠️ No leads found for business:', businessId)
+      console.log('Available business IDs in leads:', 
+        allRecords.map(r => r.fields.Business).filter(Boolean)
+      )
+    }
 
     // Fetch tenant business name once
     const business = await airtableBase('Businesses').find(businessId).catch(() => null)
     const businessName = business?.fields?.Name as string | undefined
 
-    // Get interaction and appointment counts
+    // Get interaction and appointment counts - fetch all then filter client-side
     const leadIds = records.map((r: any) => r.id)
-    const [interactionsData, appointmentsData] = await Promise.all([
-      airtableBase('Interactions')
-        .select({
-          filterByFormula: `AND({Lead} != "", FIND("${businessId}", ARRAYJOIN({Business})))`,
-          maxRecords: 10000,
-        })
-        .all()
-        .catch(() => []),
-      airtableBase('Appointments')
-        .select({
-          filterByFormula: `AND({Lead} != "", FIND("${businessId}", ARRAYJOIN({Business})))`,
-          maxRecords: 10000,
-        })
-        .all()
-        .catch(() => []),
-    ])
+    
+    // Fetch interactions
+    const interactionsDataRaw = await airtableBase('Interactions')
+      .select({ maxRecords: 10000 })
+      .all()
+      .catch(() => [])
+    
+    const interactionsData = Array.from(interactionsDataRaw).filter((r: any) => {
+      const interactionBusinessIds = r.fields.Business as string[] | undefined
+      return interactionBusinessIds?.includes(businessId)
+    })
 
-    const interactionCounts = new Map<string, number>()
-    const appointmentCounts = new Map<string, number>()
+    // Fetch appointments
+    const appointmentsDataRaw = await airtableBase('Appointments')
+      .select({ maxRecords: 10000 })
+      .all()
+      .catch(() => [])
+    
+    const appointmentsData = Array.from(appointmentsDataRaw).filter((r: any) => {
+      const appointmentBusinessIds = r.fields.Business as string[] | undefined
+      return appointmentBusinessIds?.includes(businessId)
+    })
 
-    ;(interactionsData as any[]).forEach((r: any) => {
+    const interactionCounts = new Map()
+    const appointmentCounts = new Map()
+
+    interactionsData.forEach((r: any) => {
       if (Array.isArray(r.fields.Lead)) {
         r.fields.Lead.forEach((leadId: string) => {
           interactionCounts.set(leadId, (interactionCounts.get(leadId) || 0) + 1)
@@ -78,7 +87,7 @@ export async function GET() {
       }
     })
 
-    ;(appointmentsData as any[]).forEach((r: any) => {
+    appointmentsData.forEach((r: any) => {
       if (Array.isArray(r.fields.Lead)) {
         r.fields.Lead.forEach((leadId: string) => {
           appointmentCounts.set(leadId, (appointmentCounts.get(leadId) || 0) + 1)
@@ -98,7 +107,7 @@ export async function GET() {
         teamSize: r.fields['Team Size'] as string | undefined,
         expectedVolume: r.fields['Expected Volume'] as string | undefined,
         onboardingNotes: r.fields['Onboarding Notes'] as string | undefined,
-        created: (r.fields.Created as string) || '',
+        created: (r.fields.Created as string) || new Date().toISOString(),
         businessId,
         businessName,
         interactionCount: interactionCounts.get(r.id) || 0,
@@ -106,11 +115,15 @@ export async function GET() {
       }
     })
 
+    console.log('✅ Returning leads:', leads.length)
+
     return NextResponse.json({ success: true, data: leads, requestId })
+
   } catch (error) {
     if (error instanceof TenantError) {
       return handleTenantError(error, requestId)
     }
+
     if (error instanceof Error && (error as any).status === 503 && (error as any).missing) {
       return NextResponse.json(
         {
@@ -129,4 +142,3 @@ export async function GET() {
     return NextResponse.json({ error: 'Internal server error', requestId }, { status: 500 })
   }
 }
-
