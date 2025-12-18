@@ -25,25 +25,37 @@ const automationSchema = z.object({
 
 export async function GET() {
   const requestId = crypto.randomUUID()
+
   try {
     requireAirtableReady()
+
     const { businessId } = await requireBusinessContext()
     console.log('Fetching automations', { requestId, businessId })
+
+    // Get all automations, then filter in JS by Business link
     const records = await airtableBase('Automations')
       .select({
         maxRecords: 100,
-        filterByFormula: `FIND("${businessId}", ARRAYJOIN({Business}))`,
+        // remove filterByFormula here
+        // filterByFormula: `FIND(\"${businessId}\", ARRAYJOIN({Business}))`,
       })
       .all()
 
-    const automations = records.map((r: any) => ({
-      id: r.id,
-      name: r.fields.Name as string,
-      trigger: r.fields.Trigger as string,
-      conditions: r.fields.Conditions ? JSON.parse(r.fields.Conditions as string) : null,
-      actions: JSON.parse(r.fields.Actions as string),
-      active: r.fields.Active as boolean,
-    }))
+    const automations = records
+      .filter((r: any) => {
+        const business = r.fields.Business
+        return Array.isArray(business) && business.includes(businessId)
+      })
+      .map((r: any) => ({
+        id: r.id,
+        name: r.fields.Name as string,
+        trigger: r.fields.Trigger as string,
+        conditions: r.fields.Conditions
+          ? JSON.parse(r.fields.Conditions as string)
+          : null,
+        actions: JSON.parse(r.fields.Actions as string),
+        active: r.fields.Active as boolean,
+      }))
 
     const response = NextResponse.json({ success: true, data: automations, requestId })
     return applySecurityHeaders(response)
@@ -51,7 +63,7 @@ export async function GET() {
     if (error instanceof TenantError) {
       return applySecurityHeaders(handleTenantError(error, requestId))
     }
-    // Handle Airtable not configured
+
     if (error instanceof Error && (error as any).status === 503 && (error as any).missing) {
       const response = NextResponse.json(
         {
@@ -59,7 +71,7 @@ export async function GET() {
           requestId,
           missing: (error as any).missing,
         },
-        { status: 503 }
+        { status: 503 },
       )
       return applySecurityHeaders(response)
     }
@@ -68,7 +80,11 @@ export async function GET() {
       requestId,
       error: error instanceof Error ? error.message : String(error),
     })
-    const response = NextResponse.json({ error: 'Internal server error', requestId }, { status: 500 })
+
+    const response = NextResponse.json(
+      { error: 'Internal server error', requestId },
+      { status: 500 },
+    )
     return applySecurityHeaders(response)
   }
 }

@@ -47,6 +47,8 @@ export default function CalendarPage() {
   async function loadData() {
     try {
       const response = await fetch('/api/calendar-data')
+      console.log('API Response status:', response.status) // Debug log
+      
       if (response.status === 503) {
         const result = await response.json()
         if (result.error === 'Airtable not configured') {
@@ -58,12 +60,17 @@ export default function CalendarPage() {
         setTenantError(result?.error || 'User not linked to a business')
       } else if (response.ok) {
         const result = await response.json()
+        console.log('Calendar API response:', result) // Debug log
+        
         if (result.success) {
-          setAppointments(result.data.appointments)
-          setPromptOverrides(result.data.promptOverrides)
+          setAppointments(result.data.appointments || [])
+          setPromptOverrides(result.data.promptOverrides || [])
           if (result.data.businessTimezone) {
             setBusinessTimezone(result.data.businessTimezone)
           }
+          
+          console.log('Appointments set:', result.data.appointments) // Debug log
+          console.log('Overrides set:', result.data.promptOverrides) // Debug log
         }
       }
     } catch (error) {
@@ -128,7 +135,7 @@ export default function CalendarPage() {
   }
 
   if (loading) {
-    return <div>Loading...</div>
+    return <div className="p-8">Loading...</div>
   }
 
   if (tenantError) {
@@ -139,7 +146,7 @@ export default function CalendarPage() {
   const hasOverrides = promptOverrides.length > 0
 
   return (
-    <div>
+    <div className="p-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Calendar</h1>
 
       {!hasAppointments && !hasOverrides && (
@@ -200,9 +207,7 @@ export default function CalendarPage() {
                       d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
-                  <p className="text-sm text-gray-500">
-                    {hasAppointments ? 'No appointments' : 'Connect Airtable to load appointments'}
-                  </p>
+                  <p className="text-sm text-gray-500">No appointments</p>
                 </div>
               )}
             </div>
@@ -229,7 +234,7 @@ export default function CalendarPage() {
                     type="text"
                     value={overrideForm.key}
                     onChange={(e) => setOverrideForm({ ...overrideForm, key: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     required
                   />
                 </div>
@@ -238,7 +243,7 @@ export default function CalendarPage() {
                   <textarea
                     value={overrideForm.value}
                     onChange={(e) => setOverrideForm({ ...overrideForm, value: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     rows={4}
                     required
                   />
@@ -308,9 +313,7 @@ export default function CalendarPage() {
                       d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                     />
                   </svg>
-                  <p className="text-sm text-gray-500">
-                    {hasOverrides ? 'No prompt overrides' : 'Connect Airtable to manage prompt overrides'}
-                  </p>
+                  <p className="text-sm text-gray-500">No prompt overrides</p>
                 </div>
               )}
             </div>
@@ -343,4 +346,3 @@ export default function CalendarPage() {
     </div>
   )
 }
-

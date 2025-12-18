@@ -30,7 +30,15 @@ export default function AutomationsPage() {
     actions: '',
     active: true,
   })
-
+useEffect(() => {
+  async function load() {
+    const res = await fetch('/api/automations')
+    const json = await res.json()
+    console.log('Automations API response:', json) // <- add this
+    setAutomations(json.data ?? [])
+  }
+  load()
+}, [])
   useEffect(() => {
     loadAutomations()
   }, [])
