@@ -19,11 +19,11 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    // Fetch ALL interactions (no filter in Airtable - we'll filter in JS like we did for leads)
+    // Fetch ALL interactions (no filter in Airtable - we'll filter in JS)
     const allRecords = await airtableBase('Interactions')
       .select({
         maxRecords: 1000,
-        sort: [{ field: 'Start UTC', direction: 'desc' }], // Use Start UTC instead of Created
+        sort: [{ field: 'Start UTC', direction: 'desc' }],
       })
       .all()
 
@@ -54,23 +54,77 @@ export async function GET(request: NextRequest) {
       console.log('After date filter:', records.length)
     }
 
-    const interactions = records.map((r: any) => ({
-      id: r.id,
-      name: r.fields.Name as string | undefined,
-      type: (r.fields.Type as string) || '',
-      transcript: (r.fields.Transcript as string) || '',
-      duration: r.fields.Duration as number | undefined,
-      direction: r.fields.Direction as string | undefined,
-      status: r.fields.Status as string | undefined,
-      outcome: r.fields.Outcome as string | undefined,
-      startUtc: r.fields['Start UTC'] as string | undefined,
-      endUtc: r.fields['End UTC'] as string | undefined,
-      callId: r.fields['Call ID'] as string | undefined,
-      fromNumber: r.fields['From Number'] as string | undefined,
-      toNumber: r.fields['To Number'] as string | undefined,
-      leadId: Array.isArray(r.fields.Lead) ? r.fields.Lead[0] : undefined,
-      businessId: Array.isArray(r.fields.Business) ? r.fields.Business[0] : undefined,
-    }))
+    // Get unique lead IDs and business IDs to fetch names
+    const leadIds = new Set<string>()
+    const businessIds = new Set<string>()
+
+    records.forEach((r: any) => {
+      if (Array.isArray(r.fields.Lead)) {
+        r.fields.Lead.forEach((id: string) => leadIds.add(id))
+      }
+      if (Array.isArray(r.fields.Business)) {
+        r.fields.Business.forEach((id: string) => businessIds.add(id))
+      }
+    })
+
+    // Fetch lead names
+    const leadNames = new Map<string, string>()
+    if (leadIds.size > 0) {
+      const leadRecords = await Promise.all(
+        Array.from(leadIds).map(id => 
+          airtableBase('Leads').find(id).catch(() => null)
+        )
+      )
+      leadRecords.forEach(record => {
+        if (record) {
+          leadNames.set(record.id, (record.fields.Name as string) || 'Unknown Lead')
+        }
+      })
+    }
+
+    // Fetch business names
+    const businessNames = new Map<string, string>()
+    if (businessIds.size > 0) {
+      const businessRecords = await Promise.all(
+        Array.from(businessIds).map(id => 
+          airtableBase('Businesses').find(id).catch(() => null)
+        )
+      )
+      businessRecords.forEach(record => {
+        if (record) {
+          businessNames.set(record.id, (record.fields.Name as string) || 'Unknown Business')
+        }
+      })
+    }
+
+    const interactions = records.map((r: any) => {
+      const leadId = Array.isArray(r.fields.Lead) ? r.fields.Lead[0] : undefined
+      const businessRecordId = Array.isArray(r.fields.Business) ? r.fields.Business[0] : undefined
+      
+      return {
+        id: r.id,
+        name: r.fields.Name as string | undefined,
+        type: (r.fields.Type as string) || '',
+        transcript: (r.fields.Transcript as string) || '',
+        duration: r.fields.Duration as number | undefined,
+        direction: r.fields.Direction as string | undefined,
+        status: r.fields.Status as string | undefined,
+        outcome: r.fields.Outcome as string | undefined,
+        startUtc: r.fields['Start UTC'] as string | undefined,
+        endUtc: r.fields['End UTC'] as string | undefined,
+        callId: r.fields['Call ID'] as string | undefined,
+        fromNumber: r.fields['From Number'] as string | undefined,
+        toNumber: r.fields['To Number'] as string | undefined,
+        // IDs
+        leadId: leadId,
+        businessId: businessRecordId,
+        // Names (resolved from linked records)
+        leadName: leadId ? leadNames.get(leadId) : undefined,
+        businessName: businessRecordId ? businessNames.get(businessRecordId) : undefined,
+      }
+    })
+
+    console.log('Returning interactions:', interactions.length)
 
     const response = NextResponse.json({
       success: true,

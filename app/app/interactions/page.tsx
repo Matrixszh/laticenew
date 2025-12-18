@@ -1,147 +1,130 @@
-/**
- * Interactions Table
- * Displays interactions with transcript link or excerpt
- * Includes CSV export
- */
-
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { TenantLinkCallout } from '../components/tenant-cta'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface Interaction {
   id: string
+  name?: string
   type: string
   transcript: string
   duration?: number
   direction?: string
   status?: string
-  created: string
+  outcome?: string
+  startUtc?: string
+  endUtc?: string
+  callId?: string
+  fromNumber?: string
+  toNumber?: string
+  leadId?: string
+  businessId?: string
+  leadName?: string
+  businessName?: string
 }
 
 export default function InteractionsPage() {
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [loading, setLoading] = useState(true)
-  const [tenantError, setTenantError] = useState<string | null>(null)
-  const [dateRange, setDateRange] = useState<{ startDate: string; endDate: string }>(() => {
-    const end = new Date()
-    const start = new Date()
-    start.setDate(start.getDate() - 30)
-    return {
-      startDate: start.toISOString().split('T')[0],
-      endDate: end.toISOString().split('T')[0],
-    }
+  const [error, setError] = useState<string | null>(null)
+  const [selectedTranscript, setSelectedTranscript] = useState<Interaction | null>(null)
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
   })
 
-  const loadInteractions = useCallback(async () => {
+  const loadInteractions = async () => {
+    setLoading(true)
+    setError(null)
     try {
+      console.log('=== Loading Interactions ===')
       const params = new URLSearchParams({
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
       })
+      
       const response = await fetch(`/api/interactions-list?${params}`)
+      console.log('Response status:', response.status)
+      
+      const result = await response.json()
+      console.log('API Response:', result)
+      
       if (response.status === 503) {
-        const result = await response.json()
-        if (result.error === 'Airtable not configured') {
-          setInteractions([])
-        }
+        setError('Airtable not configured')
+      } else if (response.status === 401) {
+        setError('Please sign in to view interactions')
       } else if (response.status === 403) {
-        const result = await response.json()
-        setTenantError(result?.error || 'User not linked to a business')
-      } else if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setInteractions(result.data)
-        }
+        setError(result.error || 'User not linked to a business')
+      } else if (response.ok && result.success) {
+        console.log('✅ Setting interactions:', result.data.length)
+        setInteractions(result.data)
+      } else {
+        console.error('❌ API error:', result)
+        setError(result.error || 'Failed to load interactions')
       }
-    } catch (error) {
-      console.error('Error loading interactions:', error)
-      setInteractions([])
+    } catch (err) {
+      console.error('❌ Error loading interactions:', err)
+      setError('Failed to load interactions')
     } finally {
       setLoading(false)
     }
-  }, [dateRange])
+  }
 
   useEffect(() => {
     loadInteractions()
-  }, [loadInteractions])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange.startDate, dateRange.endDate])
 
-  function exportCSV() {
-    const headers = ['ID', 'Type', 'Direction', 'Status', 'Duration', 'Transcript', 'Created']
-    const rows = interactions.map((i) => [
-      i.id,
-      i.type,
-      i.direction || '',
-      i.status || '',
-      i.duration?.toString() || '',
-      i.transcript.replace(/\n/g, ' ').substring(0, 100),
-      i.created,
-    ])
-
-    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join(
-      '\n'
-    )
-
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `interactions-${new Date().toISOString()}.csv`
-    a.click()
-  }
-
-  function getTranscriptExcerpt(transcript: string, maxLength: number = 100): string {
-    if (transcript.length <= maxLength) return transcript
-    return transcript.substring(0, maxLength) + '...'
+  const getTranscriptExcerpt = (transcript: string) => {
+    if (!transcript) return 'No transcript'
+    const words = transcript.split(' ').slice(0, 10)
+    return words.join(' ') + (transcript.split(' ').length > 10 ? '...' : '')
   }
 
   if (loading) {
-    return <div>Loading...</div>
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <p className="mt-4 text-gray-600 font-light">Loading interactions...</p>
+      </div>
+    )
   }
-
-  if (tenantError) {
-    return <TenantLinkCallout message={tenantError} />
-  }
-
-  const hasData = interactions.length > 0
 
   return (
     <div>
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-3xl font-bold text-gray-900">Interactions</h1>
-          {hasData && (
-            <button
-              onClick={exportCSV}
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-            >
-              Export CSV
-            </button>
-          )}
-        </div>
-        {/* Date Range Filter */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700">Date Range:</label>
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
-              className="px-3 py-1 text-sm rounded-md border border-gray-300"
-            />
-            <span className="text-gray-500">to</span>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
-              className="px-3 py-1 text-sm rounded-md border border-gray-300"
-            />
-          </div>
+      <div className="mb-8">
+        <h1 className="text-4xl font-semibold text-gray-900 mb-2 tracking-tight">Interactions</h1>
+        <p className="text-gray-600 font-light">View call transcripts and interaction history</p>
+      </div>
+
+      {/* Date Range Filter */}
+      <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center gap-4">
+          <label className="text-sm font-medium text-gray-700">Date Range:</label>
+          <input
+            type="date"
+            value={dateRange.startDate}
+            onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
+            className="px-3 py-1 text-sm rounded-md border border-gray-300"
+          />
+          <span className="text-gray-500">to</span>
+          <input
+            type="date"
+            value={dateRange.endDate}
+            onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
+            className="px-3 py-1 text-sm rounded-md border border-gray-300"
+          />
+          <button
+            onClick={loadInteractions}
+            className="px-4 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
-      {!hasData && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
+      {error && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
           <div className="flex items-start">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
@@ -149,124 +132,179 @@ export default function InteractionsPage() {
               </svg>
             </div>
             <div className="ml-3 flex-1">
-              <p className="text-sm text-yellow-800">
-                Connect Airtable to see interactions. The transcript viewer is ready once data is available.{' '}
-                <a href="/setup" className="underline font-medium hover:text-yellow-900">
-                  Go to setup →
-                </a>
+              <h3 className="text-sm font-medium text-yellow-800 mb-2">
+                {error === 'Airtable not configured' ? 'Airtable Not Connected' : 'Access Error'}
+              </h3>
+              <p className="text-sm text-yellow-700 mb-3">
+                {error === 'Airtable not configured' ? (
+                  <>Connect Airtable to see interactions. The transcript viewer is ready once data is available.</>
+                ) : (
+                  error
+                )}
               </p>
+              <Link
+                href="/setup"
+                className="inline-flex items-center text-sm font-medium text-yellow-800 hover:text-yellow-900 underline"
+              >
+                Go to setup →
+              </Link>
             </div>
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Type
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Direction
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Duration
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Transcript
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Created
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {hasData ? (
-              interactions.map((interaction) => (
-                <tr key={interaction.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {interaction.type}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {interaction.direction || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {interaction.status || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {interaction.duration ? `${interaction.duration}s` : '-'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    <details>
-                      <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
-                        {getTranscriptExcerpt(interaction.transcript)}
-                      </summary>
-                      <div className="mt-2 p-2 bg-gray-50 rounded text-xs whitespace-pre-wrap">
-                        {interaction.transcript}
-                      </div>
-                    </details>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(interaction.created).toLocaleDateString()}
-                  </td>
+      {!error && interactions.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <p className="text-gray-500">No interactions yet</p>
+          <p className="text-sm text-gray-400 mt-2">
+            Connect Airtable to load interactions. Columns and transcript viewer are ready.
+          </p>
+        </div>
+      ) : (
+        <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Lead
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Business
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Direction
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Duration
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Transcript
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={6} className="px-6 py-12 text-center">
-                  <div className="text-gray-500">
-                    <svg
-                      className="mx-auto h-12 w-12 text-gray-400 mb-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                      />
-                    </svg>
-                    <p className="text-base font-light">No interactions yet</p>
-                    <p className="text-sm mt-2">
-                      Connect Airtable to load interactions. Columns and transcript viewer are ready.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {interactions.map((interaction) => (
+                  <tr key={interaction.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {interaction.name || `${interaction.type} - ${interaction.callId?.slice(0, 8) || interaction.id.slice(0, 8)}`}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {interaction.leadName || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {interaction.businessName || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {interaction.type}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {interaction.direction || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        interaction.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        interaction.status === 'failed' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {interaction.status || '-'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {interaction.duration ? `${interaction.duration}s` : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-md">
+                      <div 
+                        className="truncate cursor-pointer hover:text-blue-600" 
+                        onClick={() => setSelectedTranscript(interaction)}
+                      >
+                        {getTranscriptExcerpt(interaction.transcript)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {interaction.startUtc 
+                        ? new Date(interaction.startUtc).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        : '-'
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-      <div className="mt-8">
-        <nav className="flex space-x-4">
-          <a href="/app/kpis" className="text-gray-600 hover:text-gray-900">
+      {/* Transcript Modal */}
+      {selectedTranscript && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-semibold text-gray-900">Transcript</h2>
+                <button
+                  onClick={() => setSelectedTranscript(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="mt-2 text-sm text-gray-500">
+                <p><strong>Type:</strong> {selectedTranscript.type}</p>
+                <p><strong>Lead:</strong> {selectedTranscript.leadName || 'N/A'}</p>
+                <p><strong>Date:</strong> {selectedTranscript.startUtc ? new Date(selectedTranscript.startUtc).toLocaleString() : 'N/A'}</p>
+                <p><strong>Duration:</strong> {selectedTranscript.duration ? `${selectedTranscript.duration}s` : 'N/A'}</p>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="prose max-w-none">
+                <p className="whitespace-pre-wrap text-gray-700">{selectedTranscript.transcript}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <nav className="flex space-x-6">
+          <Link href="/app/kpis" className="text-gray-600 hover:text-gray-900 transition-colors">
             KPIs
-          </a>
-          <a href="/app/automations" className="text-gray-600 hover:text-gray-900">
+          </Link>
+          <Link href="/app/leads" className="text-gray-600 hover:text-gray-900 transition-colors">
+            Leads
+          </Link>
+          <Link href="/app/automations" className="text-gray-600 hover:text-gray-900 transition-colors">
             Automations
-          </a>
-          <a
+          </Link>
+          <Link
             href="/app/interactions"
-            className="text-blue-600 font-medium border-b-2 border-blue-600 pb-2"
+            className="text-blue-600 font-medium border-b-2 border-blue-600 pb-2 transition-colors"
           >
             Interactions
-          </a>
-          <a href="/app/calendar" className="text-gray-600 hover:text-gray-900">
+          </Link>
+          <Link href="/app/calendar" className="text-gray-600 hover:text-gray-900 transition-colors">
             Calendar
-          </a>
-          <a href="/app/leads" className="text-gray-600 hover:text-gray-900">
-            Leads
-          </a>
+          </Link>
         </nav>
       </div>
     </div>
   )
 }
-
